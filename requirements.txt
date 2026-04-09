@@ -1,23 +1,12 @@
-# Floor Plan Vectorizer — dependencies
-# Python 3.9+
-
-# Core image processing
-opencv-python>=4.8.0
+cat > requirements.txt << 'EOF'
+opencv-python-headless>=4.8.0
 numpy>=1.24.0
-
-# Geometry
 shapely>=2.0.0
-
-# Data handling
 pandas>=2.0.0
-
-# Optional: OCR fallback
-# pytesseract>=0.3.10
-# Pillow>=10.0.0        # required by pytesseract
-
-# Optional: advanced segmentation
-# scikit-image>=0.21.0
-
-# Development / testing
-# pytest>=7.4.0
-# pytest-cov>=4.1.0
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9
+pytesseract>=0.3.10
+Pillow>=10.0.0
+aiofiles>=23.0.0
+EOF
