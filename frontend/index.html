@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Floor Vectorizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #13161e;
+    --border: #1e2330;
+    --accent: #c8f04a;
+    --accent-dim: rgba(200,240,74,0.12);
+    --accent-mid: rgba(200,240,74,0.35);
+    --text: #e8eaf0;
+    --muted: #555d72;
+    --error: #ff5f5f;
+    --warn: #f0a030;
+    --ok: #48c774;
+    --radius: 8px;
+    --mono: 'DM Mono', monospace;
+    --display: 'Syne', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    overflow-x: hidden;
+  }
+
+  /* subtle grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(200,240,74,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(200,240,74,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  header {
+    position: relative;
+    z-index: 1;
+    padding: 28px 40px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 20px;
+  }
+
+  .logo {
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 20px;
+    letter-spacing: -0.5px;
+    color: var(--accent);
+  }
+
+  .logo-sub {
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  main {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    max-width: 1100px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 40px;
+    align-items: start;
+  }
+
+  @media (max-width: 760px) {
+    main { grid-template-columns: 1fr; padding: 20px; }
+    header { padding: 20px; }
+  }
+
+  /* LEFT PANEL */
+  .panel-left {
+    padding-right: 40px;
+    border-right: 1px solid var(--border);
+  }
+
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  /* Drop zones */
+  .dropzone {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .dropzone::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--accent-dim);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .dropzone:hover, .dropzone.drag-over {
+    border-color: var(--accent);
+  }
+
+  .dropzone:hover::after, .dropzone.drag-over::after {
+    opacity: 1;
+  }
+
+  .dropzone.has-file {
+    border-color: rgba(200,240,74,0.4);
+    background: var(--accent-dim);
+  }
+
+  .dropzone input[type=file] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .dz-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    background: var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 16px;
+    transition: background 0.2s;
+    position: relative;
+    z-index: 1;
+  }
+
+  .dropzone.has-file .dz-icon {
+    background: var(--accent-mid);
+  }
+
+  .dz-info {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .dz-title {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dz-desc {
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .dz-filename {
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dz-optional {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Options */
+  .options-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 16px 0 24px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .toggle {
+    width: 32px;
+    height: 18px;
+    border-radius: 9px;
+    background: var(--border);
+    position: relative;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.2s;
+  }
+
+  .toggle.on { background: var(--accent); }
+
+  .toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--bg);
+    transition: transform 0.2s;
+  }
+
+  .toggle.on::after { transform: translateX(14px); }
+
+  .toggle-label { color: var(--text); flex: 1; }
+  .toggle-note { color: var(--muted); font-size: 10px; }
+
+  /* Submit button */
+  .btn-run {
+    width: 100%;
+    padding: 14px 20px;
+    background: var(--accent);
+    color: #0d0f14;
+    border: none;
+    border-radius: var(--radius);
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    text-transform: uppercase;
+  }
+
+  .btn-run:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+  .btn-run:active:not(:disabled) { transform: translateY(0); }
+  .btn-run:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* RIGHT PANEL */
+  .panel-right {
+    padding-left: 40px;
+    min-height: 400px;
+  }
+
+  /* Status area */
+  .status-idle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 320px;
+    color: var(--muted);
+    gap: 12px;
+    text-align: center;
+  }
+
+  .status-idle svg { opacity: 0.2; }
+
+  /* Processing */
+  .status-processing {
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .progress-label {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .log-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.7;
+    max-height: 200px;
+    overflow-y: auto;
+    color: var(--muted);
+  }
+
+  .log-area .log-line { display: block; }
+  .log-area .log-line.ok { color: var(--ok); }
+  .log-area .log-line.warn { color: var(--warn); }
+  .log-area .log-line.err { color: var(--error); }
+
+  /* Results */
+  .status-done {
+    display: none;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .result-header {
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 17px;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+  }
+
+  .stat-value {
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 24px;
+    color: var(--text);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-value.warn { color: var(--warn); }
+  .stat-value.ok { color: var(--ok); }
+
+  .stat-name {
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .download-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .dl-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    text-decoration: none;
+    color: var(--text);
+    background: var(--surface);
+    transition: border-color 0.15s, background 0.15s;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  .dl-btn:hover {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .dl-ext {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+
+  .ext-svg { background: rgba(72,199,116,0.15); color: var(--ok); }
+  .ext-json { background: rgba(200,240,74,0.15); color: var(--accent); }
+  .ext-zip { background: rgba(255,165,0,0.15); color: var(--warn); }
+
+  .dl-name { flex: 1; }
+  .dl-desc { color: var(--muted); font-size: 10px; }
+
+  .btn-reset {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    width: 100%;
+    margin-top: 4px;
+  }
+
+  .btn-reset:hover { border-color: var(--text); color: var(--text); }
+
+  /* Error state */
+  .status-error {
+    display: none;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .error-box {
+    background: rgba(255,95,95,0.08);
+    border: 1px solid rgba(255,95,95,0.3);
+    border-radius: var(--radius);
+    padding: 16px;
+    color: var(--error);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  /* Warnings */
+  .warn-list {
+    background: rgba(240,160,48,0.08);
+    border: 1px solid rgba(240,160,48,0.25);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+  }
+
+  .warn-list .warn-item {
+    color: var(--warn);
+    font-size: 11px;
+    line-height: 1.6;
+    display: flex;
+    gap: 8px;
+  }
+
+  .warn-item::before { content: '⚠'; flex-shrink: 0; }
+
+  footer {
+    position: relative;
+    z-index: 1;
+    padding: 16px 40px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    display: flex;
+    gap: 20px;
+  }
+
+  footer a { color: var(--muted); text-decoration: none; }
+  footer a:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">FLOOR VECTORIZER</div>
+  <div class="logo-sub">v1.0 · internal tool</div>
+</header>
+
+<main>
+  <!-- LEFT: Upload form -->
+  <div class="panel-left">
+    <div class="section-label">01 — Upload Files</div>
+
+    <!-- Plan -->
+    <div class="dropzone" id="dz-plan" ondragover="onDrag(event,this)" ondragleave="offDrag(this)" ondrop="onDrop(event,'plan')">
+      <input type="file" accept=".png,.jpg,.jpeg" onchange="onFile(event,'plan')">
+      <div class="dz-icon">🗺</div>
+      <div class="dz-info">
+        <div class="dz-title" id="plan-name">Floor Plan Image</div>
+        <div class="dz-desc" id="plan-desc">PNG or JPG · Required</div>
+      </div>
+    </div>
+
+    <!-- Overlay -->
+    <div class="dropzone" id="dz-overlay" ondragover="onDrag(event,this)" ondragleave="offDrag(this)" ondrop="onDrop(event,'overlay')">
+      <input type="file" accept=".png,.jpg,.jpeg" onchange="onFile(event,'overlay')">
+      <div class="dz-icon">🎨</div>
+      <div class="dz-info">
+        <div class="dz-title" id="overlay-name">Overlay with Color Fills</div>
+        <div class="dz-desc" id="overlay-desc">Separate overlay if different from plan</div>
+      </div>
+      <span class="dz-optional">Optional</span>
+    </div>
+
+    <!-- Mapping -->
+    <div class="dropzone" id="dz-mapping" ondragover="onDrag(event,this)" ondragleave="offDrag(this)" ondrop="onDrop(event,'mapping')">
+      <input type="file" accept=".csv,.json" onchange="onFile(event,'mapping')">
+      <div class="dz-icon">📋</div>
+      <div class="dz-info">
+        <div class="dz-title" id="mapping-name">Lot Mapping</div>
+        <div class="dz-desc" id="mapping-desc">CSV or JSON with lot_id, label, status</div>
+      </div>
+      <span class="dz-optional">Optional</span>
+    </div>
+
+    <!-- Options -->
+    <div class="options-row">
+      <div class="toggle" id="ocr-toggle" onclick="toggleOcr()"></div>
+      <div>
+        <div class="toggle-label">OCR Fallback</div>
+        <div class="toggle-note">Detect lot IDs from text inside rooms (slower)</div>
+      </div>
+    </div>
+
+    <button class="btn-run" id="btn-run" disabled onclick="submitJob()">
+      Run Vectorization →
+    </button>
+  </div>
+
+  <!-- RIGHT: Status + Results -->
+  <div class="panel-right">
+    <div class="section-label">02 — Result</div>
+
+    <!-- Idle -->
+    <div class="status-idle" id="state-idle">
+      <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+        <rect x="8" y="8" width="48" height="48" rx="4" stroke="#e8eaf0" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <path d="M20 44 L20 20 L44 44" stroke="#e8eaf0" stroke-width="1.5"/>
+        <path d="M44 20 L44 44 L20 20" stroke="#e8eaf0" stroke-width="1.5" stroke-dasharray="3 3"/>
+      </svg>
+      <div>Upload a floor plan to begin</div>
+    </div>
+
+    <!-- Processing -->
+    <div class="status-processing" id="state-proc">
+      <div class="progress-label">
+        <div class="spinner"></div>
+        <span id="proc-label">Processing…</span>
+      </div>
+      <div class="log-area" id="log-area"></div>
+    </div>
+
+    <!-- Done -->
+    <div class="status-done" id="state-done">
+      <div class="result-header">
+        <span>✓</span>
+        <span>Vectorization Complete</span>
+      </div>
+
+      <div class="stats-grid" id="stats-grid"></div>
+
+      <div id="warn-container"></div>
+
+      <div class="section-label" style="margin-top:4px;">Download Files</div>
+      <div class="download-list" id="download-list"></div>
+
+      <button class="btn-reset" onclick="resetUI()">← Process Another Floor</button>
+    </div>
+
+    <!-- Error -->
+    <div class="status-error" id="state-error">
+      <div class="result-header" style="color:var(--error)">
+        <span>✕</span><span>Processing Failed</span>
+      </div>
+      <div class="error-box" id="error-msg"></div>
+      <button class="btn-reset" onclick="resetUI()">← Try Again</button>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span>Floor Plan Vectorizer · Internal Tool</span>
+  <a href="/docs" target="_blank">API Docs →</a>
+</footer>
+
+<script>
+const files = { plan: null, overlay: null, mapping: null };
+let ocrEnabled = false;
+let currentJobId = null;
+let pollInterval = null;
+
+// ---- File handling ----
+
+function onFile(e, slot) {
+  const file = e.target.files[0];
+  if (file) setFile(slot, file);
+}
+
+function onDrop(e, slot) {
+  e.preventDefault();
+  const dz = document.getElementById('dz-' + slot);
+  dz.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) setFile(slot, file);
+}
+
+function onDrag(e, el) { e.preventDefault(); el.classList.add('drag-over'); }
+function offDrag(el) { el.classList.remove('drag-over'); }
+
+function setFile(slot, file) {
+  files[slot] = file;
+  const dz = document.getElementById('dz-' + slot);
+  const nameEl = document.getElementById(slot + '-name');
+  const descEl = document.getElementById(slot + '-desc');
+  dz.classList.add('has-file');
+  nameEl.textContent = file.name;
+  nameEl.className = 'dz-filename';
+  descEl.textContent = formatBytes(file.size);
+  checkReady();
+}
+
+function formatBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1024**2) return (b/1024).toFixed(1) + ' KB';
+  return (b/1024**2).toFixed(1) + ' MB';
+}
+
+function checkReady() {
+  document.getElementById('btn-run').disabled = !files.plan;
+}
+
+function toggleOcr() {
+  ocrEnabled = !ocrEnabled;
+  const t = document.getElementById('ocr-toggle');
+  t.classList.toggle('on', ocrEnabled);
+}
+
+// ---- Job submission ----
+
+async function submitJob() {
+  const fd = new FormData();
+  fd.append('plan', files.plan);
+  if (files.overlay) fd.append('overlay', files.overlay);
+  if (files.mapping) fd.append('mapping', files.mapping);
+  fd.append('ocr_fallback', ocrEnabled);
+
+  setState('proc');
+  addLog('Uploading files…');
+  document.getElementById('btn-run').disabled = true;
+
+  try {
+    const res = await fetch('/vectorize', { method: 'POST', body: fd });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    currentJobId = data.job_id;
+    addLog('Job started: ' + currentJobId.slice(0, 8) + '…');
+    startPolling();
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+// ---- Polling ----
+
+function startPolling() {
+  let dots = 0;
+  const labels = [
+    'Segmenting room fills…',
+    'Closing door gaps…',
+    'Extracting contours…',
+    'Simplifying geometry…',
+    'Assigning lot IDs…',
+    'Generating SVG…',
+  ];
+  let li = 0;
+
+  pollInterval = setInterval(async () => {
+    dots++;
+    if (dots % 3 === 0 && li < labels.length - 1) {
+      li++;
+      addLog(labels[li]);
+    }
+
+    try {
+      const res = await fetch('/status/' + currentJobId);
+      const data = await res.json();
+
+      if (data.status === 'done') {
+        clearInterval(pollInterval);
+        addLog('✓ Done!');
+        showResults(data);
+      } else if (data.status === 'error') {
+        clearInterval(pollInterval);
+        showError(data.error || 'Unknown pipeline error');
+      }
+    } catch (e) {
+      // network blip, keep polling
+    }
+  }, 900);
+}
+
+// ---- Results ----
+
+function showResults(data) {
+  setState('done');
+
+  // Stats
+  const sg = document.getElementById('stats-grid');
+  const stats = [
+    { v: data.lots_found ?? '—', n: 'Regions Found', cls: 'ok' },
+    { v: data.lots_matched ?? '—', n: 'Lots Matched', cls: 'ok' },
+    { v: data.unmatched?.length ?? 0, n: 'Unmatched IDs', cls: data.unmatched?.length ? 'warn' : '' },
+    { v: data.suspicious ?? 0, n: 'Suspicious', cls: data.suspicious ? 'warn' : '' },
+  ];
+  sg.innerHTML = stats.map(s =>
+    `<div class="stat-card">
+      <div class="stat-value ${s.cls}">${s.v}</div>
+      <div class="stat-name">${s.n}</div>
+    </div>`
+  ).join('');
+
+  // Warnings
+  const wc = document.getElementById('warn-container');
+  const warns = [...(data.warnings || [])];
+  if (data.unmatched?.length) warns.push('Unmatched lot IDs: ' + data.unmatched.join(', '));
+  if (warns.length) {
+    wc.innerHTML = `<div class="warn-list">${warns.map(w => `<div class="warn-item">${w}</div>`).join('')}</div>`;
+  }
+
+  // Downloads
+  const dl = document.getElementById('download-list');
+  const jid = currentJobId;
+  const items = [
+    { file: 'lots.svg', ext: 'SVG', cls: 'ext-svg', desc: 'Clean polygons, no background' },
+    { file: 'lots_preview.svg', ext: 'SVG', cls: 'ext-svg', desc: 'With plan background' },
+    { file: 'lots.json', ext: 'JSON', cls: 'ext-json', desc: 'Polygon metadata + centroids' },
+    { file: 'validation_report.json', ext: 'JSON', cls: 'ext-json', desc: 'Quality report' },
+  ];
+
+  dl.innerHTML = items.map(it => `
+    <a class="dl-btn" href="/result/${jid}/${it.file}" download="${it.file}">
+      <span class="dl-ext ${it.cls}">${it.ext}</span>
+      <span class="dl-name">${it.file}</span>
+      <span class="dl-desc">${it.desc}</span>
+    </a>
+  `).join('') + `
+    <a class="dl-btn" href="/result/${jid}" download>
+      <span class="dl-ext ext-zip">ZIP</span>
+      <span class="dl-name">All files</span>
+      <span class="dl-desc">Download everything</span>
+    </a>`;
+}
+
+// ---- Helpers ----
+
+function addLog(msg) {
+  const la = document.getElementById('log-area');
+  const cls = msg.startsWith('✓') ? 'ok' : msg.startsWith('⚠') ? 'warn' : msg.startsWith('✕') ? 'err' : '';
+  la.innerHTML += `<span class="log-line ${cls}">${escHtml(msg)}</span>\n`;
+  la.scrollTop = la.scrollHeight;
+  document.getElementById('proc-label').textContent = msg;
+}
+
+function showError(msg) {
+  setState('error');
+  document.getElementById('error-msg').textContent = msg;
+}
+
+function setState(s) {
+  ['idle','proc','done','error'].forEach(k => {
+    const el = document.getElementById('state-' + k);
+    el.style.display = (k === s) ? 'flex' : 'none';
+  });
+}
+
+function resetUI() {
+  if (currentJobId) {
+    fetch('/job/' + currentJobId, { method: 'DELETE' }).catch(() => {});
+  }
+  files.plan = files.overlay = files.mapping = null;
+  currentJobId = null;
+  clearInterval(pollInterval);
+  document.getElementById('log-area').innerHTML = '';
+  document.getElementById('warn-container').innerHTML = '';
+  document.getElementById('stats-grid').innerHTML = '';
+  document.getElementById('download-list').innerHTML = '';
+  ['plan','overlay','mapping'].forEach(slot => {
+    const dz = document.getElementById('dz-' + slot);
+    dz.classList.remove('has-file');
+    // reset file input
+    const inp = dz.querySelector('input[type=file]');
+    if (inp) inp.value = '';
+  });
+  document.getElementById('plan-name').textContent = 'Floor Plan Image';
+  document.getElementById('plan-name').className = 'dz-title';
+  document.getElementById('plan-desc').textContent = 'PNG or JPG · Required';
+  document.getElementById('overlay-name').textContent = 'Overlay with Color Fills';
+  document.getElementById('overlay-name').className = 'dz-title';
+  document.getElementById('overlay-desc').textContent = 'Separate overlay if different from plan';
+  document.getElementById('mapping-name').textContent = 'Lot Mapping';
+  document.getElementById('mapping-name').className = 'dz-title';
+  document.getElementById('mapping-desc').textContent = 'CSV or JSON with lot_id, label, status';
+  checkReady();
+  setState('idle');
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// init
+setState('idle');
+</script>
+</body>
+</html>
